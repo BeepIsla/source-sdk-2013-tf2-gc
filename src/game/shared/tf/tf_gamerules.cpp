@@ -15366,6 +15366,7 @@ void CTFGameRules::ClientCommandKeyValues( edict_t *pEntity, KeyValues *pKeyValu
 		{
 			BroadcastDrawLine( pTFPlayer, pKeyValues );
 		}
+#ifdef ENABLE_SDK_INVENTORY
 		else if ( FStrEq( pszCommand, "sdk_inventory" ) )
 		{
 			CSteamID steamID;
@@ -15374,6 +15375,7 @@ void CTFGameRules::ClientCommandKeyValues( edict_t *pEntity, KeyValues *pKeyValu
 
 			GTFGCClientSystem()->ProcessPlayerInventoryRequest( steamID, pKeyValues );
 		}
+#endif
 		else
 		{
 			BaseClass::ClientCommandKeyValues( pEntity, pKeyValues );

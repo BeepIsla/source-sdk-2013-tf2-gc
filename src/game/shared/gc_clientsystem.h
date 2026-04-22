@@ -10,7 +10,7 @@
 #endif
 
 #ifdef CLIENT_DLL
-	#include "clientsteamcontext.h"
+#include "clientsteamcontext.h"
 #endif
 
 //=============================================================================
@@ -35,11 +35,11 @@ public:
 	virtual void Shutdown() OVERRIDE;
 
 	// Updates.  Gameservers do this at a slightly different place than clients
-	#ifdef CLIENT_DLL
-		virtual void Update( float frametime ) OVERRIDE;
-	#else
-		virtual void PreClientUpdate() OVERRIDE;
-	#endif
+#ifdef CLIENT_DLL
+	virtual void Update( float frametime ) OVERRIDE;
+#else
+	virtual void PreClientUpdate() OVERRIDE;
+#endif
 
 	// Connection status
 	bool BConnectedtoGC() const { return m_bConnectedToGC; }
@@ -57,9 +57,9 @@ public:
 	GCSDK::CGCClient *GetGCClient();
 
 	// Steam
-	#ifndef CLIENT_DLL
-		void GameServerActivate();
-	#endif
+#ifndef CLIENT_DLL
+	void GameServerActivate();
+#endif
 
 	char const * GetTxnCountryCode() const { return m_sTxnCountryCode.Get(); }
 
@@ -70,15 +70,28 @@ protected:
 	virtual void PreInitGC() {}
 	virtual void PostInitGC() {}
 
+#ifdef CLIENT_DLL
+	friend class CGCClientJobClientWelcome;
+	virtual void ReceivedClientWelcome( const CMsgClientWelcome &msg );
+
+	friend class CGCClientJobClientGoodbye;
+	virtual void ReceivedClientGoodbye( const CMsgClientGoodbye &msg );
+#else
+	friend class CGCClientJobServerWelcome;
+	virtual void ReceivedServerWelcome( const CMsgServerWelcome &msg );
+
+	friend class CGCClientJobServerGoodbye;
+	virtual void ReceivedServerGoodbye( const CMsgServerGoodbye &msg );
+#endif
 
 private:
-	void SetConnectedToGC( bool bConnected );
+	void SetConnectedToGC( bool bConnected, int nByeReason = -1 );
 
-	#ifdef CLIENT_DLL
+#ifdef CLIENT_DLL
 		void SteamLoggedOnCallback( const SteamLoggedOnChange_t &loggedOnState );
-	#else
+#else
 		STEAM_GAMESERVER_CALLBACK( CGCClientSystem, OnLogonSuccess, SteamServersConnected_t, m_CallbackLogonSuccess );
-	#endif
+#endif
 
 	bool m_bInittedGC;
 	bool m_bConnectedToGC;

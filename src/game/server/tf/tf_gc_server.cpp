@@ -1350,7 +1350,9 @@ void CTFGCServerSystem::Shutdown()
 		GCClientSystem()->GetGCClient()->RemoveSOCacheListener( m_ourSteamID, this );
 	}
 
+#ifdef ENABLE_SDK_INVENTORY
 	m_mapEquipmentRequests.PurgeAndDeleteElements();
+#endif
 }
 
 void CTFGCServerSystem::LevelInitPreEntity()
@@ -1484,7 +1486,9 @@ void CTFGCServerSystem::PreClientUpdate( )
 
 	CRTime::UpdateRealTime();
 
+#ifdef ENABLE_SDK_INVENTORY
 	WebapiEquipmentThink();
+#endif
 
 	if ( GCClientSystem()->BConnectedtoGC() )
 	{
@@ -4026,6 +4030,7 @@ ConVar tf_mm_trusted( "tf_mm_trusted", "0", FCVAR_NOTIFY | FCVAR_HIDDEN,
 	"Set to 1 on Valve servers to requested trusted status.  (Yes, it is authenticated on the backend, and attempts by non-valve servers are logged.)\n",
 	OnMMServerModeTrustedChanged );
 
+#ifdef ENABLE_SDK_INVENTORY
 // Backoff api
 void CTFGCServerSystem::WebapiEquipmentState_t::Backoff()
 {
@@ -4398,5 +4403,6 @@ void CTFGCServerSystem::SDK_ApplyLocalLoadout(CGCClientSharedObjectCache* pCache
 		}
 	}
 }
+#endif
 
 #endif // #ifdef ENABLE_GC_MATCHMAKING

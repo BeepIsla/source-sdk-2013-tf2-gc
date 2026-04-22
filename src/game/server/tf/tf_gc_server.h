@@ -507,7 +507,9 @@ public:
 	bool BPendingReliableMessages() const { return ReliableMsgQueue().NumPendingMessages() > 0; }
 	bool BStalledReliableMessages() const { return ReliableMsgQueue().BStalled(); }
 
+#ifdef ENABLE_SDK_INVENTORY
 	void ProcessPlayerInventoryRequest( CSteamID steamID, KeyValues* pKVRequest );
+#endif
 
 protected:
 
@@ -603,6 +605,7 @@ private:
 	float m_timeLastConnectedToGC;
 //	DOTAGameVersion	m_GameVersion;
 
+#ifdef ENABLE_SDK_INVENTORY
 	enum EWebapiEquipmentState {
 		kWebapiEquipmentState_Init,
 
@@ -659,7 +662,7 @@ private:
 
 	void SDK_ApplyInventoryInfo( CGCClientSharedObjectCache* pCache, KeyValues* pKVRequest ); // mod expansion point
 	void SDK_ApplyLocalLoadout(CGCClientSharedObjectCache* pCache, KeyValues* pKVRequest);
-
+#endif
 
 	//
 	// Reliable Messages

@@ -301,13 +301,16 @@ private:
 
 	// DECL_STEAM_CALLBACK( LobbyChatMsg );
 	// DECL_STEAM_CALLBACK( SomeOtherFunThing... );
+#ifdef ENABLE_SDK_INVENTORY
 	DECL_STEAM_CALLBACK( GetTicketForWebApiResponse );
+#endif
 
 #undef DECL_STEAM_CALLBACK
 
 	//
 	// SDK inventory
 	//
+#ifdef ENABLE_SDK_INVENTORY
 	void WebapiInventoryThink();
 	void OnWebapiInventoryReceived( HTTPRequestCompleted_t* pInfo, bool bIOFailure );
 	void OnWebapiAuthTicketReceived( GetTicketForWebApiResponse_t* pInfo );
@@ -380,6 +383,7 @@ private:
 	// SDK expansion points
 	void SDK_SelectItemsToSendToServer( CMsgAuthorizeServerItemRetrieval* /*out*/ pMsg, CGCClientSharedObjectCache* pSOCache );
 	void SDK_AddServerInventoryInfo( KeyValues* /*out*/ pKV, CGCClientSharedObjectCache* pSOCache );
+#endif
 
 	//
 	// Match logic

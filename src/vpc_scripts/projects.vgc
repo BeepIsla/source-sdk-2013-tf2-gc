@@ -38,6 +38,11 @@ $Project "game_shader_generic_std"
 	"materialsystem\stdshaders\game_shader_generic_std_tf.vpc" [$TF]
 }
 
+$Project "gcsdk"
+{
+	"gcsdk\gcsdk_game.vpc"
+}
+
 $Project "glview"
 {
 	"utils\glview\glview.vpc" [$WINDOWS]

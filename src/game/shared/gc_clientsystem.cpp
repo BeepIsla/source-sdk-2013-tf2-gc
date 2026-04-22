@@ -8,6 +8,7 @@
 #include "econ_item_system.h"
 #include "econ_item_inventory.h"
 #include "quest_objective_manager.h"
+#include "gcsystemmsgs.pb.h"
 #ifdef GAME_DLL
 #include "tf_wartracker.h"
 #endif
@@ -60,7 +61,7 @@ CON_COMMAND( dump_all_caches, "Dump the contents all subsribed SOCaches" )
 #pragma warning(disable : 4355) // warning C4355: 'this': used in base member initializer list
 #endif
 CGCClientSystem::CGCClientSystem()
-: CAutoGameSystemPerFrame( "CGCClientSystem" )
+	: CAutoGameSystemPerFrame( "CGCClientSystem" )
 #ifdef CLIENT_DLL
 	, m_GCClient( NULL, false )
 #else
@@ -104,18 +105,18 @@ bool CGCClientSystem::BSendMessage( uint32 unMsgType, const uint8 *pubData, uint
 //-----------------------------------------------------------------------------
 // Purpose:
 //-----------------------------------------------------------------------------
-bool CGCClientSystem::BSendMessage( const GCSDK::CGCMsgBase& msg )									
-{ 
-	return m_GCClient.BSendMessage( msg ); 
+bool CGCClientSystem::BSendMessage( const GCSDK::CGCMsgBase& msg )
+{
+	return m_GCClient.BSendMessage( msg );
 }
 
 
 //-----------------------------------------------------------------------------
 // Purpose:
 //-----------------------------------------------------------------------------
-bool CGCClientSystem::BSendMessage( const GCSDK::CProtoBufMsgBase& msg )									
-{ 
-	return m_GCClient.BSendMessage( msg ); 
+bool CGCClientSystem::BSendMessage( const GCSDK::CProtoBufMsgBase& msg )
+{
+	return m_GCClient.BSendMessage( msg );
 }
 
 
@@ -144,7 +145,7 @@ void CGCClientSystem::PostInit()
 	// Call into the BaseClass.
 	CAutoGameSystemPerFrame::PostInit();
 
-	#ifdef CLIENT_DLL
+#ifdef CLIENT_DLL
 		// Install callback to be notified when our steam logged on status changes.
 		ClientSteamContext().InstallCallback( UtlMakeDelegate( this, &CGCClientSystem::SteamLoggedOnCallback ) );
 
@@ -153,7 +154,7 @@ void CGCClientSystem::PostInit()
 		AssertMsg( ClientSteamContext().BLoggedOn(), "No Steam logged on for GC setup!" );
 
 		ThinkConnection();
-	#endif
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -247,8 +248,36 @@ void CGCClientSystem::InitGC()
 	if ( m_bInittedGC )
 		return;
 
+#ifdef ENABLE_SDK_INVENTORY
 	m_GCClient.BInit( nullptr );
 	m_bInittedGC = true;
+#else
+	// Locate our steam client interface.
+#ifdef CLIENT_DLL
+	ISteamClient *pSteamClient = SteamClient();
+	HSteamUser hSteamUser = SteamAPI_GetHSteamUser();
+	HSteamPipe hSteamPipe = SteamAPI_GetHSteamPipe();
+#else
+	ISteamClient *pSteamClient = SteamGameServerClient();
+	HSteamUser hSteamUser = SteamGameServer_GetHSteamUser();
+	HSteamPipe hSteamPipe = SteamGameServer_GetHSteamPipe();
+#endif
+	if ( pSteamClient == NULL )
+	{
+		Warning( "CGCClientSystem - no ISteamClient interface!\n" );
+		Assert( pSteamClient );
+		return;
+	}
+
+	// Get the SteamGameCoordinator and initialize the GCClient
+	void *pGenericInterface = pSteamClient->GetISteamGenericInterface( hSteamUser, hSteamPipe, STEAMGAMECOORDINATOR_INTERFACE_VERSION );
+	ISteamGameCoordinator *pGameCoordinator = static_cast<ISteamGameCoordinator *>( pGenericInterface );
+	if ( pGameCoordinator )
+	{
+		m_GCClient.BInit( pGameCoordinator );
+		m_bInittedGC = true;
+	}
+#endif
 }
 
 
@@ -261,11 +290,11 @@ void CGCClientSystem::Update( float frametime )
 		m_GCClient.BMainLoop( k_nThousand, (uint64)( frametime * 1000000.0f ) );
 }
 #else
-void CGCClientSystem::PreClientUpdate()	
-{ 
+void CGCClientSystem::PreClientUpdate()
+{
 	ThinkConnection();
 	if ( m_bInittedGC )
-		m_GCClient.BMainLoop( k_nThousand, ( uint64 )( gpGlobals->frametime * 1000000.0f ) ); 	
+		m_GCClient.BMainLoop( k_nThousand, ( uint64 )( gpGlobals->frametime * 1000000.0f ) );
 }
 #endif
 
@@ -273,11 +302,11 @@ void CGCClientSystem::PreClientUpdate()
 void CGCClientSystem::ThinkConnection()
 {
 	// Currently logged on?
-	#ifdef CLIENT_DLL	
-		bool bLoggedOn = ClientSteamContext().BLoggedOn();
-	#else
-		bool bLoggedOn = steamgameserverapicontext && steamgameserverapicontext->SteamGameServer() && steamgameserverapicontext->SteamGameServer()->BLoggedOn();
-	#endif
+#ifdef CLIENT_DLL	
+	bool bLoggedOn = ClientSteamContext().BLoggedOn();
+#else
+	bool bLoggedOn = steamgameserverapicontext && steamgameserverapicontext->SteamGameServer() && steamgameserverapicontext->SteamGameServer()->BLoggedOn();
+#endif
 	if ( bLoggedOn )
 	{
 
@@ -288,10 +317,30 @@ void CGCClientSystem::ThinkConnection()
 			// Re-init logon
 			m_bLoggedOn = true;
 
-			m_timeLastSendHello = -999.9;
+			// server should automatically send us a HELLO pretty quickly after it detects us logon.  Give it some time to send
+			m_timeLastSendHello = Plat_FloatTime() + 2.0f;
+			Assert( !m_bConnectedToGC );
 			SetupGC();
 		}
 
+		// Check if we need to send a HELLO message to re-sync connection with the GC
+		Assert( m_bInittedGC );
+		if ( !m_bConnectedToGC )
+		{
+			if ( m_timeLastSendHello < Plat_FloatTime() - k_flClientHelloRetry )
+			{
+				m_timeLastSendHello = Plat_FloatTime();
+
+				#ifdef CLIENT_DLL
+					GCSDK::CProtoBufMsg<CMsgClientHello> msg( k_EMsgGCClientHello );
+					msg.Body().set_version( engine->GetClientVersion() );
+				#else
+					GCSDK::CProtoBufMsg<CMsgServerHello> msg( k_EMsgGCServerHello );
+					msg.Body().set_version( engine->GetServerVersion() );
+				#endif
+				BSendMessage( msg );
+			}
+		}
 
 	}
 	else
@@ -299,16 +348,132 @@ void CGCClientSystem::ThinkConnection()
 
 		// We're not logged on.  Clear all connection state flags
 		m_bLoggedOn = false;
-		SetConnectedToGC( false );
+		m_bConnectedToGC = false;
 		m_timeLastSendHello = -999.9;
 	}
 }
 
-void CGCClientSystem::SetConnectedToGC( bool bConnected )
+#ifdef CLIENT_DLL
+void CGCClientSystem::ReceivedClientWelcome( const CMsgClientWelcome &msg )
 {
+	m_sTxnCountryCode.Set( msg.txn_country_code().c_str() );
+	SetConnectedToGC( true );
+}
+
+class CGCClientJobClientWelcome : public GCSDK::CGCClientJob
+{
+public:
+	CGCClientJobClientWelcome( GCSDK::CGCClient *pGCClient ) : GCSDK::CGCClientJob( pGCClient ) {}
+
+	virtual bool BYieldingRunJobFromMsg( IMsgNetPacket *pNetPacket )
+	{
+		CProtoBufMsg<CMsgClientWelcome> msg( pNetPacket );
+		GCClientSystem()->ReceivedClientWelcome( msg.Body() );
+		return true;
+	}
+};
+GC_REG_JOB( GCSDK::CGCClient, CGCClientJobClientWelcome, "CGCClientJobClientWelcome", k_EMsgGCClientWelcome, k_EServerTypeGCClient );
+
+void CGCClientSystem::ReceivedClientGoodbye( const CMsgClientGoodbye &msg )
+{
+	switch ( msg.reason() )
+	{
+		case GCGoodbyeReason_GC_GOING_DOWN:
+			Warning("The item server is shutting down. Items will be unavailable temporarily.\n");
+			break;
+
+		case GCGoodbyeReason_NO_SESSION:
+			if (m_bConnectedToGC)
+			{
+				Warning("The connection to the item server has been interrupted.  Attempting to re-negotiate connection now.\n");
+			}
+			break;
+
+		default:
+			Warning("Received goodbye message from the item server with unknown reason code %d.\n", (int)msg.reason());
+			break;
+	}
+	SetConnectedToGC( false );
+}
+
+class CGCClientJobClientGoodbye : public GCSDK::CGCClientJob
+{
+public:
+	CGCClientJobClientGoodbye( GCSDK::CGCClient *pGCClient ) : GCSDK::CGCClientJob( pGCClient ) {}
+
+	virtual bool BYieldingRunJobFromMsg( IMsgNetPacket *pNetPacket )
+	{
+		CProtoBufMsg<CMsgClientGoodbye> msg( pNetPacket );
+		GCClientSystem()->ReceivedClientGoodbye( msg.Body() );
+		return true;
+	}
+};
+GC_REG_JOB( GCSDK::CGCClient, CGCClientJobClientGoodbye, "CGCClientJobClientGoodbye", k_EMsgGCClientGoodbye, k_EServerTypeGCClient );
+
+#else
+
+void CGCClientSystem::ReceivedServerWelcome( const CMsgServerWelcome &msg )
+{
+	SetConnectedToGC( true );
+}
+
+class CGCClientJobServerWelcome : public GCSDK::CGCClientJob
+{
+public:
+	CGCClientJobServerWelcome( GCSDK::CGCClient *pGCServer ) : GCSDK::CGCClientJob( pGCServer ) {}
+
+	virtual bool BYieldingRunJobFromMsg( IMsgNetPacket *pNetPacket )
+	{
+		CProtoBufMsg<CMsgServerWelcome> msg( pNetPacket );
+		GCClientSystem()->ReceivedServerWelcome( msg.Body() );
+		return true;
+	}
+};
+GC_REG_JOB( GCSDK::CGCClient, CGCClientJobServerWelcome, "CGCClientJobServerWelcome", k_EMsgGCServerWelcome, k_EServerTypeGCClient );
+
+void CGCClientSystem::ReceivedServerGoodbye( const CMsgServerGoodbye &msg )
+{
+	SetConnectedToGC( false, msg.reason() );
+}
+
+class CGCClientJobServerGoodbye : public GCSDK::CGCClientJob
+{
+public:
+	CGCClientJobServerGoodbye( GCSDK::CGCClient *pGCClient ) : GCSDK::CGCClientJob( pGCClient ) {}
+
+	virtual bool BYieldingRunJobFromMsg( IMsgNetPacket *pNetPacket )
+	{
+		CProtoBufMsg<CMsgServerGoodbye> msg( pNetPacket );
+		GCClientSystem()->ReceivedServerGoodbye( msg.Body() );
+		return true;
+	}
+};
+GC_REG_JOB( GCSDK::CGCClient, CGCClientJobServerGoodbye, "CGCClientJobServerGoodbye", k_EMsgGCServerGoodbye, k_EServerTypeGCClient );
+
+#endif // #ifdef CLIENT_DLL, #else
+
+void CGCClientSystem::SetConnectedToGC( bool bConnected, int nByeReason )
+{
+	if ( m_bConnectedToGC == bConnected )
+		return;
+
 	m_bConnectedToGC = bConnected;
-	/// XXX(JohnS): If we want server-side gc state events this is the place to add them. Consider if they should be
-	///             networked.
+
+	switch ( nByeReason )
+	{
+	case -1:
+		break;
+	case GCGoodbyeReason_GC_GOING_DOWN:
+		Warning( "The item server is shutting down. Items will be unavailable temporarily.\n" );
+		break;
+	case GCGoodbyeReason_NO_SESSION:
+		Warning( "The connection to the game coordinator has been interrupted.  Attempting to re-negotiate connection now.\n" );
+		break;
+	default:
+		Warning( "Received goodbye message from game coordinator with unknown reason code %d.\n", nByeReason );
+		break;
+	}
+
 #ifdef CLIENT_DLL
 	IGameEvent *pEvent = gameeventmanager->CreateEvent( bConnected ? "gc_new_session" : "gc_lost_session" );
 	if ( pEvent )

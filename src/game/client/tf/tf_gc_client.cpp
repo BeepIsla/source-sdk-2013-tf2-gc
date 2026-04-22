@@ -304,7 +304,7 @@ void CTFGCClientSystem::InvalidatePingData()
 {
 }
 
-
+#ifdef ENABLE_SDK_INVENTORY
 // Backoff api
 void CTFGCClientSystem::WebapiInventoryState_t::Backoff()
 {
@@ -589,9 +589,11 @@ void CTFGCClientSystem::WebapiInventoryThink()
 		break;
 	}
 }
+#endif
 
 void CTFGCClientSystem::ServerRequestEquipment()
 {
+#ifdef ENABLE_SDK_INVENTORY
 	// Something went wrong on the server side (e.g. steam invalidated our inventory auth ticket)
 	// Get a new one and try again.
 	if( m_WebapiInventory.m_eState == kWebapiInventoryState_SentToServer )
@@ -602,14 +604,17 @@ void CTFGCClientSystem::ServerRequestEquipment()
 	{
 		// If we are in any other state, we're already in the process of sending the server a new set of equipment as soon as we can
 	}
+#endif
 }
 
 void CTFGCClientSystem::LocalInventoryChanged()
 {
+#ifdef ENABLE_SDK_INVENTORY
 	m_WebapiInventory.m_bLocalChangesApplied = true;
+#endif
 }
 
-
+#ifdef ENABLE_SDK_INVENTORY
 void CTFGCClientSystem::OnSteamGetTicketForWebApiResponse( GetTicketForWebApiResponse_t *pInfo )
 {
 	OnWebapiAuthTicketReceived( pInfo );
@@ -866,16 +871,16 @@ void CTFGCClientSystem::SDK_AddServerInventoryInfo( KeyValues* pKV, CGCClientSha
 	pKV->AddSubKey(pLoadoutKV);
 
 }
+#endif
 
 //-----------------------------------------------------------------------------
 void CTFGCClientSystem::Update( float frametime )
 {
 	BaseClass::Update( frametime );
 
-
+#ifdef ENABLE_SDK_INVENTORY
 	WebapiInventoryThink();
-
-
+#endif
 
 	FOR_EACH_VEC_BACK( m_vecDelayedLocalPlayerSOListenersToAdd, i )
 	{
